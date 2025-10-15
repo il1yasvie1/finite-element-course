@@ -47,7 +47,7 @@ class QuadratureRule(object):
         <ex-integrate>`.
         """
 
-        raise NotImplementedError
+        return sum(p * function(x) for p, x in zip(self.weights, self.points))
 
 
 def gauss_quadrature(cell, degree):

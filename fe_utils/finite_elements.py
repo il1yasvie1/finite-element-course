@@ -16,8 +16,19 @@ def lagrange_points(cell, degree):
     <ex-lagrange-points>`.
 
     """
+    if cell is ReferenceInterval:
+        if degree == 1:
+            return cell.vertices
+        else:
+            return np.append(cell.vertices, [[i / degree] for i in range(1, degree)], axis=0)
 
-    raise NotImplementedError
+    elif cell is ReferenceTriangle:
+        points = cell.vertices
+        for i in range(degree + 1):
+            for j in range(degree + 1 - i):
+                if [i/degree, j/degree] not in cell.vertices.tolist():
+                    points = np.append(points, [[i / degree, j / degree]], axis=0)
+        return points
 
 
 def vandermonde_matrix(cell, degree, points, grad=False):
@@ -35,7 +46,27 @@ def vandermonde_matrix(cell, degree, points, grad=False):
     <ex-vandermonde>`.
     """
 
-    raise NotImplementedError
+    if cell is ReferenceInterval:
+        if not grad:
+            V = np.array([[x[0]**i for i in range(degree + 1)] for x in points])
+        else:
+            V = np.array([[[0 if d == 0 else d * x[0]**(d - 1)] for d in range(degree + 1)] for x in points])
+        return V
+    elif cell is ReferenceTriangle:
+        if not grad:
+            V = np.array([[x[0]**(d-i) * x[1]**i for d in range(degree + 1) for i in range(d + 1)] for x in points])
+        else:
+            V = []
+            for px, py in points:
+                row = []
+                for d in range(degree + 1):
+                    for i in range(d + 1):
+                        dx = (d - i) * px**(d - i - 1) * py**i if d - i > 0 else 0
+                        dy = i * px**(d - i) * py**(i - 1) if i > 0 else 0
+                        row.append([dx, dy])
+                V.append(row)
+            V = np.array(V)    
+        return V
 
 
 class FiniteElement(object):
@@ -78,7 +109,7 @@ class FiniteElement(object):
         # Replace this exception with some code which sets
         # self.basis_coefs
         # to an array of polynomial coefficients defining the basis functions.
-        raise NotImplementedError
+        self.basis_coefs = np.linalg.inv(vandermonde_matrix(cell, degree, nodes))
 
         #: The number of nodes in this element.
         self.node_count = nodes.shape[0]
@@ -104,7 +135,8 @@ class FiniteElement(object):
 
         """
 
-        raise NotImplementedError
+        V = vandermonde_matrix(self.cell, self.degree, points, grad)
+        return np.einsum('ij...,jl->il...', V, self.basis_coefs)
 
     def interpolate(self, fn):
         """Interpolate fn onto this finite element by evaluating it
@@ -143,9 +175,10 @@ class LagrangeElement(FiniteElement):
         <ex-lagrange-element>`.
         """
 
-        raise NotImplementedError
+
         # Use lagrange_points to obtain the set of nodes.  Once you
         # have obtained nodes, the following line will call the
         # __init__ method on the FiniteElement class to set up the
         # basis coefficients.
+        nodes = lagrange_points(cell, degree)
         super(LagrangeElement, self).__init__(cell, degree, nodes)
