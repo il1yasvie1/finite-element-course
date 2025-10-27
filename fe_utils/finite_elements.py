@@ -24,10 +24,16 @@ def lagrange_points(cell, degree):
 
     elif cell is ReferenceTriangle:
         points = cell.vertices
-        for i in range(degree + 1):
-            for j in range(degree + 1 - i):
-                if [i/degree, j/degree] not in cell.vertices.tolist():
-                    points = np.append(points, [[i / degree, j / degree]], axis=0)
+        if degree <= 1:
+            return points
+        else:
+            h = 1 / degree
+            points = np.append(points,
+                               [[1-i*h, i*h] for i in range(1, degree)] +
+                               [[0, i*h] for i in range(1, degree)] +
+                               [[i*h, 0] for i in range(1, degree)] +
+                               [[i*h, j*h] for i in range(1, degree) for j in range(1, degree-i)],
+                               axis=0)
         return points
 
 
@@ -57,12 +63,12 @@ def vandermonde_matrix(cell, degree, points, grad=False):
             V = np.array([[x[0]**(d-i) * x[1]**i for d in range(degree + 1) for i in range(d + 1)] for x in points])
         else:
             V = []
-            for px, py in points:
+            for x, y in points:
                 row = []
                 for d in range(degree + 1):
                     for i in range(d + 1):
-                        dx = (d - i) * px**(d - i - 1) * py**i if d - i > 0 else 0
-                        dy = i * px**(d - i) * py**(i - 1) if i > 0 else 0
+                        dx = (d - i) * x**(d - i - 1) * y**i if d - i > 0 else 0
+                        dy = i * x**(d - i) * y**(i - 1) if i > 0 else 0
                         row.append([dx, dy])
                 V.append(row)
             V = np.array(V)    
@@ -153,7 +159,7 @@ class FiniteElement(object):
 
         """
 
-        raise NotImplementedError
+        return np.array([fn(x) for x in self.nodes])
 
     def __repr__(self):
         return "%s(%s, %s)" % (self.__class__.__name__,
@@ -181,4 +187,19 @@ class LagrangeElement(FiniteElement):
         # __init__ method on the FiniteElement class to set up the
         # basis coefficients.
         nodes = lagrange_points(cell, degree)
-        super(LagrangeElement, self).__init__(cell, degree, nodes)
+        
+        if cell is ReferenceInterval:
+            entity_nodes = {0: {0: [0],
+                                1: [1]},
+                            1: {0: list(range(2, degree + 1)) if degree > 1 else []}}
+        elif cell is ReferenceTriangle:
+            entity_nodes = {0: {0: [0],
+                                1: [1],
+                                2: [2]},
+                            1: {0: list(range(3, 3 + degree - 1)) if degree > 1 else [],
+                                1: list(range(3 + degree -1, 3 + 2*(degree -1))) if degree > 1 else [],
+                                2: list(range(3 + 2*(degree -1), 3 + 3*(degree -1))) if degree > 1 else []},
+                            2: {0: list(range(3 + 3*(degree -1), len(nodes))) if degree > 1 else []}}
+        else:
+            raise NotImplementedError
+        super(LagrangeElement, self).__init__(cell, degree, nodes, entity_nodes=entity_nodes)

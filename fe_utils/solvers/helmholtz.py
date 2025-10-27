@@ -8,6 +8,7 @@ from numpy import cos, pi
 import scipy.sparse as sp
 import scipy.sparse.linalg as splinalg
 from argparse import ArgumentParser
+from fe_utils.quadrature import gauss_quadrature
 
 
 def assemble(fs, f):
@@ -15,11 +16,11 @@ def assemble(fs, f):
     the function space in which to solve and the right hand side
     function."""
 
-    raise NotImplementedError
-
     # Create an appropriate (complete) quadrature rule.
-
+    Q  = gauss_quadrature(fs.element.cell, fs.element.degree*2)
     # Tabulate the basis functions and their gradients at the quadrature points.
+    phi = fs.element.tabulate(Q.points)
+    dphi = fs.element.tabulate(Q.points, True)
 
     # Create the left hand side matrix and right hand side vector.
     # This creates a sparse matrix because creating a dense one may
@@ -29,6 +30,12 @@ def assemble(fs, f):
 
     # Now loop over all the cells and assemble A and l
 
+    for c in range(fs.mesh.entity_counts[-1]):
+        J = fs.mesh.jacobian(c)
+        Jinv = np.linalg.inv(J)
+        detJ = np.abs(np.linalg.det(J))
+        A[np.ix_(fs.cell_nodes[c], fs.cell_nodes[c])] += detJ * np.einsum('i, ijk->jk', Q.weights, np.einsum('ba, ijb, ikc, ca -> ijk', Jinv, dphi, dphi, Jinv) + np.einsum('ij, ik -> ijk', phi, phi))
+        l[fs.cell_nodes[c]] += detJ*np.einsum('i, ij, i -> j', Q.weights, phi, phi@f.values[fs.cell_nodes[c]])
     return A, l
 
 

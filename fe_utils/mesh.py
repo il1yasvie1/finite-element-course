@@ -2,6 +2,7 @@ from scipy.spatial import Delaunay
 import numpy as np
 import itertools
 from .reference_elements import ReferenceTriangle, ReferenceInterval
+from.finite_elements import LagrangeElement
 
 
 class Mesh(object):
@@ -72,6 +73,9 @@ class Mesh(object):
         #: :class:`Mesh` is composed.
         self.cell = (0, ReferenceInterval, ReferenceTriangle)[self.dim]
 
+        self.dPsi = LagrangeElement(self.cell, 1).tabulate(self.cell.vertices, grad=True)[0]
+
+
     def adjacency(self, dim1, dim2):
         """Return the set of `dim2` entities adjacent to each `dim1`
         entity. For example if `dim1==2` and `dim2==1` then return the list of
@@ -88,7 +92,10 @@ class Mesh(object):
         """
 
         if dim2 >= dim1:
-            raise ValueError("""dim2 must be less than dim1.""")
+            if dim2 == dim1 and dim2 == self.dim:
+                return np.array(list(range(self.entity_counts[-1]))).reshape(-1, 1)
+            else:
+                raise ValueError("""dim2 must be less than to dim1.""")
         if dim2 < 0:
             raise ValueError("""dim2 cannot be negative.""")
         if dim1 > self.dim:
@@ -111,10 +118,8 @@ class Mesh(object):
         :param c: The number of the cell for which to return the Jacobian.
         :result: The Jacobian for cell ``c``.
         """
-
-        raise NotImplementedError
-
-
+        return np.dot(self.vertex_coords[self.cell_vertices[c]].T, self.dPsi)
+    
 class UnitIntervalMesh(Mesh):
     """A mesh of the unit interval."""
     def __init__(self, nx):

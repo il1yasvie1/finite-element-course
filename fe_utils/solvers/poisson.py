@@ -16,7 +16,33 @@ def assemble(fs, f):
     the function space in which to solve and the right hand side
     function."""
 
-    raise NotImplementedError
+    Q  = gauss_quadrature(fs.element.cell, fs.element.degree*2)
+    # Tabulate the basis functions and their gradients at the quadrature points.
+    phi = fs.element.tabulate(Q.points)
+    dphi = fs.element.tabulate(Q.points, True)
+
+    # Create the left hand side matrix and right hand side vector.
+    # This creates a sparse matrix because creating a dense one may
+    # well run your machine out of memory!
+    A = sp.lil_matrix((fs.node_count, fs.node_count))
+    l = np.zeros(fs.node_count)
+
+    # Now loop over all the cells and assemble A and l
+
+    for c in range(fs.mesh.entity_counts[-1]):
+        J = fs.mesh.jacobian(c)
+        Jinv = np.linalg.inv(J)
+        detJ = np.abs(np.linalg.det(J))
+        A[np.ix_(fs.cell_nodes[c], fs.cell_nodes[c])] += \
+        detJ * np.einsum('i, i...', Q.weights, np.einsum('ba, ijb, ikc, ca -> ijk', Jinv, dphi, dphi, Jinv))
+        l[fs.cell_nodes[c]] += detJ*np.einsum('i, ij, i -> j', Q.weights, phi, phi@f.values[fs.cell_nodes[c]])
+    
+    nodes = boundary_nodes(fs)
+    l[nodes] = 0.
+    A[nodes, :] = 0.
+    A[np.ix_(nodes, nodes)] = sp.eye(len(nodes))
+
+    return A, l
 
 
 def boundary_nodes(fs):
